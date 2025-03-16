@@ -37,7 +37,7 @@ function Invoke-OllamaAIGenAPI {
                 Write-Warning "OllamaEndpoint not found in config file. Using default: 'http://localhost:11434/api/chat'."
             }
             Write-Verbose "Ollama Endpoint: '$script:OllamaEndpoint'"
-            $Model = $Model ?? $script:LLMConfiguration.DefaultGeminiModel
+            $Model = if ($Model) { model } else { $script:LLMConfiguration.DefaultOllamaModel }
             Write-Verbose "Initializing Invoke-OllamaAIGenAPI for model '$Model'"
 
 

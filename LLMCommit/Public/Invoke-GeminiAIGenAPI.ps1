@@ -13,8 +13,8 @@ function Invoke-GeminiAIGenAPI {
         [int]$InitialRetryIntervalSeconds = 1 
     )
     begin {
-         # --- Load LLM Configuration at the beginning of New-LLMCommitMessage's begin block ---
-         try {
+        # --- Load LLM Configuration at the beginning of New-LLMCommitMessage's begin block ---
+        try {
             if (-not $script:LLMConfiguration) {
                 # Check if already loaded
                 $script:ConfigFile = Join-Path -Path $HOME -ChildPath ".llmconfig.json"
@@ -33,7 +33,7 @@ function Invoke-GeminiAIGenAPI {
             # If config loading fails, defaults will be used in process block
         }
         # --- End Config Loading ---
-        $Model = $Model ?? $script:LLMConfiguration.DefaultGeminiModel
+        $Model = if ($Model) { model } else { $script:LLMConfiguration.DefaultOllamaModel }
 
         Write-Verbose "Initializing Invoke-GeminiAIGenAPI for model '$Model'"
         $GeminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models"

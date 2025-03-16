@@ -82,7 +82,7 @@ git commit -m $msg
 
 ## Requirements
 
-- PowerShell Core 7.0 or higher
+- PowerShell 5.1 or higher
 - Git command-line tools
 - For Ollama: Local Ollama installation
 - For Gemini: Google API key (stored securely via SecretManagement as `GeminiApiKey`)
