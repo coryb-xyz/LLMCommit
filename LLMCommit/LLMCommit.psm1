@@ -12,5 +12,9 @@ foreach ($import in @($Public + $Private)) {
     }
 }
 
+# Run update to initialize the LLM configuration
+Update-LLMConfig -Initialize
+
+
 # Export public functions
 Export-ModuleMember -Function $Public.BaseName

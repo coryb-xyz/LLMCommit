@@ -5,5 +5,6 @@
   "OllamaEndpoint": "http://localhost:11434/api/chat",
   "OllamaMaxContextSize": 12288,
   "OllamaSafetyMarginPercent": 0.1,
-  "ApiMaxRetries": 5
+  "ApiMaxRetries": 5,
+  "GeminiApiKeyName": "GeminiApiKey"
 }

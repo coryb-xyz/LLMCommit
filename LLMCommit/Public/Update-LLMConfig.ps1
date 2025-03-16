@@ -16,7 +16,7 @@ function script:Get-ConfigKeys {
                 return @()
             }
         }
-        
+
         # Read config and extract keys
         $config = Get-Content -Path $script:ConfigFile -Raw | ConvertFrom-Json
         return ($config | Get-Member -MemberType NoteProperty).Name
@@ -27,39 +27,84 @@ function script:Get-ConfigKeys {
     }
 }
 
+# Helper function to initialize config file
+function script:Initialize-ConfigFile {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [Switch] $Force
+    )
+    try {
+        $defaultConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "default-llm-config.json"
+        if (!(Test-Path -Path $defaultConfigPath -PathType Leaf)) {
+            throw "Default config file 'default-llm-config.json' not found in script directory '$PSScriptRoot'."
+        }
+
+        if (!(Test-Path $script:ConfigFile) -or $Force) {
+            Write-Verbose "Initializing config file with defaults from '$defaultConfigPath'"
+            Copy-Item -Path $defaultConfigPath -Destination $script:ConfigFile -Force
+            Write-Verbose "Successfully initialized LLM config file at '$script:ConfigFile'."
+        }
+
+        # Refresh config keys
+        $script:configKeys = Get-ConfigKeys
+
+       
+    }
+    catch {
+        Write-Error "Error initializing LLM config file: $_"
+    }
+}
+
 # Populate config keys at dot-sourcing time
 $script:configKeys = Get-ConfigKeys
 
 # Register the argument completer for Update-LLMConfig -Setting parameter
 Register-ArgumentCompleter -CommandName 'Update-LLMConfig' -ParameterName 'Setting' -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-    
+
     # Use cached keys if available, otherwise regenerate them
     $keys = if ($script:configKeys) { $script:configKeys } else { $script:configKeys = Get-ConfigKeys }
-    
+
     # Filter and return matching keys
     $keys | Where-Object { $_ -like "$wordToComplete*" }
 }
 
 function Update-LLMConfig {
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'Update')]
     param(
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'Update')]
         [ValidateNotNullOrEmpty()]
         [Alias("ConfigSetting")]
         [string]$Setting,
 
-        [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'Update')]
         [ValidateNotNullOrEmpty()]
-        [string]$Value
+        [string]$Value,
+
+        [Parameter(Mandatory, ParameterSetName = 'Initialize')]
+        [switch]$Initialize,
+
+        [Parameter(ParameterSetName = 'Initialize')]
+        [switch] $Force
+
     )
-    
+
     begin {
-        Write-Verbose "Starting Update-LLMConfig for setting '$Setting'"
+        Write-Verbose "Starting Update-LLMConfig"
     }
-    
+
     process {
         try {
+            # Handle initialization if requested
+            if ($Initialize) {
+                Initialize-ConfigFile -Force:$Force
+                return
+            }
+
+            # For the update path, continue with the existing functionality
+            Write-Verbose "Processing update for setting '$Setting'"
+
             # Check if config file exists, create with defaults if not
             if (!(Test-Path -Path $script:ConfigFile -PathType Leaf)) {
                 Write-Verbose "Config file not found. Creating with defaults."
@@ -84,26 +129,26 @@ function Update-LLMConfig {
             else {
                 # Setting exists, determine its type and convert the new value accordingly
                 $currentValue = $config.$Setting
-                
+
                 if ($null -eq $currentValue) {
                     # If current value is null, just use the string value
                     $config.$Setting = $Value
                 }
                 elseif ($currentValue -is [int] -or $currentValue -is [long]) {
                     # Try to convert to integer
-                    try { 
-                        $config.$Setting = [int]$Value 
+                    try {
+                        $config.$Setting = [int]$Value
                     }
-                    catch { 
+                    catch {
                         throw "Value for '$Setting' must be an integer (current type: $($currentValue.GetType().Name))."
                     }
                 }
                 elseif ($currentValue -is [double] -or $currentValue -is [float] -or $currentValue -is [decimal]) {
                     # Try to convert to double
-                    try { 
-                        $config.$Setting = [double]$Value 
+                    try {
+                        $config.$Setting = [double]$Value
                     }
-                    catch { 
+                    catch {
                         throw "Value for '$Setting' must be a decimal number (current type: $($currentValue.GetType().Name))."
                     }
                 }
@@ -128,14 +173,14 @@ function Update-LLMConfig {
 
             # Update script-level configKeys to reflect any changes
             $script:configKeys = ($config | Get-Member -MemberType NoteProperty).Name
-            
+
             Write-Host "Successfully updated LLM config setting '$Setting' to '$Value'."
         }
         catch {
             Write-Error "Error updating LLM config: $_" -ErrorAction Stop
         }
     }
-    
+
     end {
         Write-Verbose "Update-LLMConfig completed."
     }

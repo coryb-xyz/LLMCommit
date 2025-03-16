@@ -13,6 +13,27 @@ function Invoke-GeminiAIGenAPI {
         [int]$InitialRetryIntervalSeconds = 1 
     )
     begin {
+         # --- Load LLM Configuration at the beginning of New-LLMCommitMessage's begin block ---
+         try {
+            if (-not $script:LLMConfiguration) {
+                # Check if already loaded
+                $script:ConfigFile = Join-Path -Path $HOME -ChildPath ".llmconfig.json"
+                if (!(Test-Path -Path $script:ConfigFile -PathType Leaf)) {
+                    throw "LLM config file not found at '$script:ConfigFile'."
+                }
+                $script:LLMConfiguration = Get-Content -Path $script:ConfigFile -Raw | ConvertFrom-Json -ErrorAction Stop
+                Write-Verbose "LLM Configuration loaded within New-LLMCommitMessage from '$script:ConfigFile'."
+            }
+            else {
+                Write-Verbose "LLM Configuration already loaded (likely by script-level initialization or calling function)."
+            }
+        }
+        catch {
+            Write-Warning "Warning: Error loading LLM Configuration in New-LLMCommitMessage: $_ Using default provider and API settings."
+            # If config loading fails, defaults will be used in process block
+        }
+        # --- End Config Loading ---
+
         Write-Verbose "Initializing Invoke-GeminiAIGenAPI for model '$Model'"
         $GeminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models"
         $ApiEndpoint = "$GeminiEndpointBase/$($Model):generateContent"
@@ -22,7 +43,7 @@ function Invoke-GeminiAIGenAPI {
         $plainTextApiKeyPtr = $null
         try {
             Write-Verbose "Retrieving Gemini API Key from Secret Management"
-            $secureApiKey = Get-Secret -Name GeminiApiKey
+            $secureApiKey = Get-Secret -Name $script:LLMConfiguration.GeminiApiKeyName
 
             # Securely convert SecureString to plain text string
             $plainTextApiKeyPtr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureApiKey)
