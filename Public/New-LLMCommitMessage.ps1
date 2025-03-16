@@ -23,44 +23,52 @@ function script:Test-FileIsPlainText {
 
 function script:Get-FileChangeSummary {
     param(
-        [Parameter(Mandatory)]
-        [string[]]$StagedFiles,
-        [Parameter(Mandatory)]
-        [string[]]$UnstagedFiles
+        [Parameter(Mandatory=$false)]  # Change from Mandatory to optional
+        [string[]]$StagedFiles = @(),   # Provide default empty array
+        [Parameter(Mandatory=$false)]  # Change from Mandatory to optional
+        [string[]]$UnstagedFiles = @()  # Provide default empty array
     )
-    Write-Verbose "Entering Get-FileChangeSummary"
-    $changeSummary = @{
-        TextFiles    = @()
-        BinaryFiles  = @()
-        OtherChanges = @()
+
+    $allFiles = @($StagedFiles) + @($UnstagedFiles) | Select-Object -Unique
+
+    # Group binary files by directory and extension
+    $binaryFiles = $allFiles | Where-Object {
+        $fullpath = Resolve-Path $_
+
+        !(Test-FileIsPlainText $fullpath)
+    } | Group-Object {
+        [System.IO.Path]::GetDirectoryName($_)
     }
 
-    # Process staged files
-    foreach ($file in $StagedFiles) {
-        if (script:Test-FileIsPlainText -FilePath $file) {
-            $changeSummary.TextFiles += $file
-        }
-        else {
-            $changeSummary.BinaryFiles += $file
-        }
-    }
+    $binarySummary = foreach ($group in $binaryFiles) {
+        $exts = $group.Group | ForEach-Object {
+            [System.IO.Path]::GetExtension($_)
+        } | Select-Object -Unique
 
-    # Process unstaged files (if requested)
-    foreach ($file in $UnstagedFiles) {
-        if ($file -notin $StagedFiles) {
-            # Avoid duplicates if a file is both staged and unstaged (unlikely but possible)
-            if (script:Test-FileIsPlainText -FilePath $file) {
-                $changeSummary.TextFiles += $file
+        foreach ($ext in $exts) {
+            $count = ($group.Group | Where-Object {
+                    [System.IO.Path]::GetExtension($_) -eq $ext
+                }).Count
+
+            @{
+                Directory = $group.Name
+                Extension = $ext
+                Count     = $count
+                Action    = if ($group.Group[0] -in $StagedFiles) { "Added" } else { "Modified" }
             }
-            else {
-                $changeSummary.BinaryFiles += $file
-            }
         }
     }
 
-    # ( 확장:  Detect and summarize other types of changes - renames, deletes, etc. if needed for better context )
-    Write-Verbose "Exiting Get-FileChangeSummary"
-    return $changeSummary
+    # Find text files that can be diffed
+    $textFiles = $allFiles | Where-Object {
+        $fullpath = Resolve-Path $_
+        Test-FileIsPlainText $fullpath
+    }
+
+    return @{
+        BinaryChanges = $binarySummary
+        TextFiles     = $textFiles
+    }
 }
 
 function script:Get-FileChanges {
@@ -335,10 +343,17 @@ function New-LLMCommitMessage {
 
             Write-Verbose "Getting changed files"
             $stagedFiles = @(git diff --name-only --cached)
-            $unstagedFiles = { if (-not $StagedOnly) { @(git diff --name-only) } else { @() } }.InvokeReturnAsIs() ?? "N/A"
-
+            $unstagedFiles = if (-not $StagedOnly) { @(git diff --name-only) } else { @() }
+            
+            # If no staged files but we have unstaged files, use those regardless of StagedOnly
+            if (-not $stagedFiles -and $unstagedFiles) {
+                Write-Warning "No staged files found. Using all modified files instead."
+                $StagedOnly = $false  # Override StagedOnly to use unstaged files
+            }
+            
+            # Check if we have any files to analyze (staged or unstaged)
             if (-not ($stagedFiles + $unstagedFiles)) {
-                throw "No modified files found in the repository."
+                throw "No modified files found in the repository. Nothing to commit."
             }
 
             Write-Verbose "Analyzing changes"
