@@ -252,11 +252,16 @@ function New-LLMCommitMessage {
         [Parameter()]
         [ValidateSet("Ollama", "Gemini")]
         [string]$LLMProvider, # Optional Provider - defaults to config or Ollama
+        
         [Parameter()]
         [ValidateNotNullOrEmpty()]
         [string]$Model, # Model parameter - will be mandatory depending on provider in PROCESS block
+        
         [Parameter()]
-        [switch]$StagedOnly
+        [switch]$StagedOnly,
+        
+        [Parameter()]
+        [string]$Context # New parameter for user-provided context/seed for the commit message
     )
 
     begin {
@@ -347,9 +352,14 @@ function New-LLMCommitMessage {
             }
             $changes.TextChanges = $textChanges
             $changeSummary = script:Build-ChangeSummary -Changes $changes
+            if (-not [string]::IsNullOrWhiteSpace($Context)) {
+                Write-Verbose "User provided context: $Context"
+                # Prepend the user context to the change summary
+                $changeSummary = "USER CONTEXT: $Context`n`n$changeSummary"
+            }
 
             $systemPrompt = @"
-You are an expert in writing Git commit messages that adhere to Linux kernel contribution standards. Your goal is to create a well-structured and informative commit message based on a provided change summary. Follow these guidelines strictly:
+You are an expert in writing Git commit messages. Your goal is to create a well-structured and informative commit message based on a provided change summary. Follow these guidelines strictly:
 
 - **Subject Line:**
     - Start with an *imperative verb* (e.g., Fix, Add, Update, Refactor).
@@ -367,13 +377,25 @@ You are an expert in writing Git commit messages that adhere to Linux kernel con
 Write a commit message that is clear, concise, and informative, providing sufficient context for reviewers and future maintainers to understand the purpose and impact of the changes. **Return the commit message as plain text. Do not format the output as a code block or use markdown.**
 "@
 
-            $userPrompt = @"
+$userPrompt = if (-not [string]::IsNullOrWhiteSpace($Context)) {
+    @"
+Write a commit message for these changes:
+
+$changeSummary
+
+IMPORTANT: Pay special attention to the USER CONTEXT at the beginning, which provides the user's intent or explanation for these changes. Incorporate this context into your commit message.
+
+Format as a proper git commit message with summary and details.
+"@
+} else {
+    @"
 Write a commit message for these changes:
 
 $changeSummary
 
 Format as a proper git commit message with summary and details.
 "@
+}
 
 
             # Prepare parameter splat based on LLMProvider - Common parameters
