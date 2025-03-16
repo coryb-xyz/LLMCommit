@@ -23,9 +23,9 @@ function script:Test-FileIsPlainText {
 
 function script:Get-FileChangeSummary {
     param(
-        [Parameter(Mandatory=$false)]  # Change from Mandatory to optional
-        [string[]]$StagedFiles = @(),   # Provide default empty array
-        [Parameter(Mandatory=$false)]  # Change from Mandatory to optional
+        [Parameter(Mandatory = $false)]  # Change from Mandatory to optional
+        [string[]]$StagedFiles = @(), # Provide default empty array
+        [Parameter(Mandatory = $false)]  # Change from Mandatory to optional
         [string[]]$UnstagedFiles = @()  # Provide default empty array
     )
 
@@ -191,21 +191,17 @@ Removed lines: $removedLines lines removed.
 
     # Construct prompts - System prompt can be more generic, User prompt is file-specific summary
     $systemPrompt = @"
-You are a helpful AI assistant specialized in understanding code changes in Git diff format and summarizing them concisely.
-Your goal is to provide a very short, informative summary of the changes in each file, suitable for inclusion in a commit message.
-Focus on the high-level intent and impact of the changes, not just the line-by-line modifications. Be extremely concise.
+You are a highly skilled Git diff summarizer, tasked with providing concise and technically accurate summaries of code changes, focusing on the *purpose* and *impact* of the modifications.  Analyze the provided git diff and identify:
+
+- The *type* of change (e.g., bug fix, feature addition, refactoring, performance improvement).
+- The *functional area* or *subsystem* affected by the changes.
+- The *core problem* being addressed or the *benefit* being introduced.
+- The *key technical modifications* made to achieve this.
+
+Focus on conveying the *significance* and *reasoning* behind the changes, not just the mechanics of the code modifications.  Summarize in 1-3 sentences, using technical terms and active voice.  Omit file paths and obvious metadata. **Return the summary as plain text. Do not format the output as a code block or use markdown.**
 "@
 
-    $userPrompt = @"
-Summarize the following code changes in Git diff format for file '$FilePath'. Be extremely concise and focus on the high-level changes.
-Diff Content:
-``````diff
-$DiffContent
-powershell
-
-Copy code
-File Summary: $summary
-"@
+    $userPrompt = "Summarize these changes:`n$DiffContent"
 
     Write-Verbose "Exiting Get-GitDiffSummary for '$FilePath'"
     return @{
@@ -246,36 +242,6 @@ function script:Build-ChangeSummary {
     Write-Verbose "Exiting Build-ChangeSummary"
     return $summary
 }
-
-
-function script:Get-CommitMessagePrompt {
-    param(
-        [Parameter(Mandatory)]
-        [string]$ChangeSummary
-    )
-    Write-Verbose "Entering Get-CommitMessagePrompt"
-
-    $systemPrompt = @"
-You are an expert AI assistant specialized in generating concise and informative commit messages for Git.
-Analyze the provided summary of code changes and generate a commit message that accurately and briefly describes these changes.
-Follow conventional commit message format. Start with a concise summary in the imperative mood (e.g., 'Fix bug...', 'Add feature...').
-If applicable, include a more detailed explanation after the summary, separated by a blank line. Be brief and to the point
-"@
-
-    $userPrompt = @"
-Based on the following summary of code changes, generate a concise and informative commit message.
-Change Summary:
-``````
-$ChangeSummary
-``````
-"@
-    Write-Verbose "Exiting Get-CommitMessagePrompt"
-    return @{
-        SystemPrompt = $systemPrompt
-        UserPrompt   = $userPrompt
-    }
-}
-
 
 #endregion  Script-Level Helper Functions
 
@@ -382,14 +348,39 @@ function New-LLMCommitMessage {
             $changes.TextChanges = $textChanges
             $changeSummary = script:Build-ChangeSummary -Changes $changes
 
-            $commitMessagePrompts = script:Get-CommitMessagePrompt -ChangeSummary $changeSummary
+            $systemPrompt = @"
+You are an expert in writing Git commit messages that adhere to Linux kernel contribution standards. Your goal is to create a well-structured and informative commit message based on a provided change summary. Follow these guidelines strictly:
+
+- **Subject Line:**
+    - Start with an *imperative verb* (e.g., Fix, Add, Update, Refactor).
+    - Aim for a concise summary under 50 characters, maximum 72.
+    - Capitalize the first word. No period at the end.
+    - Optionally, begin with a *subsystem prefix* followed by a colon and a space (e.g., `net:`, `fs:`, `drivers:`).  Infer the most relevant subsystem from the change summary if possible.
+- **Body (separated by a blank line):**
+    - Explain the *motivation* for the change: *Why* is this change necessary? What problem does it solve? What improvement does it bring?
+    - Briefly describe *what* was changed to address the problem or achieve the improvement.
+    - If applicable, mention *how* the change achieves its goal, but keep it concise. Focus more on *what* and *why*.
+    - Use bullet points for listing specific changes or aspects of the commit.
+    - Wrap all lines at 72 characters.
+    - Use active voice and technical terminology.
+
+Write a commit message that is clear, concise, and informative, providing sufficient context for reviewers and future maintainers to understand the purpose and impact of the changes. **Return the commit message as plain text. Do not format the output as a code block or use markdown.**
+"@
+
+            $userPrompt = @"
+Write a commit message for these changes:
+
+$changeSummary
+
+Format as a proper git commit message with summary and details.
+"@
 
 
             # Prepare parameter splat based on LLMProvider - Common parameters
             $apiParams = @{
                 Model        = $Model
-                UserPrompt   = $commitMessagePrompts.UserPrompt
-                SystemPrompt = $commitMessagePrompts.SystemPrompt
+                UserPrompt   = $userPrompt
+                SystemPrompt = $systemPrompt
             }
 
             Write-Verbose "Generating commit message using $($llmProviderForCall) API"
