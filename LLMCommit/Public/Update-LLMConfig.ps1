@@ -5,18 +5,6 @@ $script:configKeys = $null # Will be populated during dot-sourcing
 # Helper function to load config keys - can be called both at dot-sourcing time and during tab completion
 function script:Get-ConfigKeys {
     try {
-        # Ensure config file exists
-        if (!(Test-Path -Path $script:ConfigFile -PathType Leaf)) {
-            $defaultConfigPath = Join-Path -Path $PSScriptRoot -ChildPath "default-llm-config.json"
-            if (Test-Path -Path $defaultConfigPath -PathType Leaf) {
-                Copy-Item -Path $defaultConfigPath -Destination $script:ConfigFile -Force
-            }
-            else {
-                # If default config doesn't exist, return empty array
-                return @()
-            }
-        }
-
         # Read config and extract keys
         $config = Get-Content -Path $script:ConfigFile -Raw | ConvertFrom-Json
         return ($config | Get-Member -MemberType NoteProperty).Name
