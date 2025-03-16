@@ -6,15 +6,13 @@ function Invoke-OllamaAIGenAPI {
         [Parameter(Mandatory)]
         [string]$SystemPrompt, # System prompt content
         [Parameter()]
-        [string]$Model = "gemma3:4b", # Default Ollama model
+        [string]$Model, # Default Ollama model
         [Parameter()]
         [int]$MaxRetries = 3, # Optional: Retry attempts for potential issues
         [Parameter()]
         [int]$InitialRetryIntervalSeconds = 1 # Optional: Initial retry wait (seconds)
     )
     begin {
-        Write-Verbose "Initializing Invoke-OllamaAIGenAPI for model '$Model'"
-
         # Load LLM Configuration at the beginning of Invoke-OllamaAIGenAPI's begin block
         try {
             if (-not $script:LLMConfiguration) {
@@ -39,6 +37,8 @@ function Invoke-OllamaAIGenAPI {
                 Write-Warning "OllamaEndpoint not found in config file. Using default: 'http://localhost:11434/api/chat'."
             }
             Write-Verbose "Ollama Endpoint: '$script:OllamaEndpoint'"
+            $Model = $Model ?? $script:LLMConfiguration.DefaultGeminiModel
+            Write-Verbose "Initializing Invoke-OllamaAIGenAPI for model '$Model'"
 
 
         }

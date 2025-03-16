@@ -1,5 +1,7 @@
 {
   "DefaultProvider": "Ollama",
+  "DefaultOllamaModel": "qwen2.5-coder:latest",
+  "DefaultGeminiModel": "gemini-2.0-flash",
   "OllamaWordsPerTokenHeuristic": 0.75,
   "ApiInitialRetryIntervalSeconds": 1,
   "OllamaEndpoint": "http://localhost:11434/api/chat",

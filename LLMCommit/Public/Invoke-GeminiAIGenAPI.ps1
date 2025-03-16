@@ -6,7 +6,7 @@ function Invoke-GeminiAIGenAPI {
         [Parameter(Mandatory)]
         [string]$SystemPrompt, 
         [Parameter()]
-        [string]$Model = "gemini-2.0-flash", 
+        [string]$Model, 
         [Parameter()]
         [int]$MaxRetries = 5, 
         [Parameter()]
@@ -33,6 +33,7 @@ function Invoke-GeminiAIGenAPI {
             # If config loading fails, defaults will be used in process block
         }
         # --- End Config Loading ---
+        $Model = $Model ?? $script:LLMConfiguration.DefaultGeminiModel
 
         Write-Verbose "Initializing Invoke-GeminiAIGenAPI for model '$Model'"
         $GeminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models"
