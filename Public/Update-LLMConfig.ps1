@@ -12,9 +12,8 @@ function script:Get-ConfigKeys {
                 Copy-Item -Path $defaultConfigPath -Destination $script:ConfigFile -Force
             }
             else {
-                # If default config doesn't exist, return hardcoded fallback keys
-                return @("DefaultProvider", "OllamaMaxContextSize", "OllamaWordsPerTokenHeuristic", 
-                         "OllamaSafetyMarginPercent", "ApiMaxRetries", "ApiInitialRetryIntervalSeconds")
+                # If default config doesn't exist, return empty array
+                return @()
             }
         }
         
@@ -23,9 +22,8 @@ function script:Get-ConfigKeys {
         return ($config | Get-Member -MemberType NoteProperty).Name
     }
     catch {
-        # If any error occurs, return hardcoded fallback keys
-        return @("DefaultProvider", "OllamaMaxContextSize", "OllamaWordsPerTokenHeuristic", 
-                 "OllamaSafetyMarginPercent", "ApiMaxRetries", "ApiInitialRetryIntervalSeconds")
+        # If any error occurs, return empty array
+        return @()
     }
 }
 
@@ -79,22 +77,49 @@ function Update-LLMConfig {
             # Validate Setting parameter
             $validSettings = ($config | Get-Member -MemberType NoteProperty).Name
             if ($Setting -notin $validSettings) {
-                throw "Invalid Setting: '$Setting'. Valid settings are: $($validSettings -join ', ')"
+                # If setting doesn't exist, add it as a string value
+                Write-Verbose "Adding new setting '$Setting' to config"
+                Add-Member -InputObject $config -MemberType NoteProperty -Name $Setting -Value $Value
             }
-
-            # Update the setting with type conversion
-            $settingType = $config | Get-Member -MemberType NoteProperty | 
-                           Where-Object { $_.Name -eq $Setting } | 
-                           Select-Object -ExpandProperty Definition
-            
-            if ($settingType -like "*[int]*") {
-                $config.$Setting = [int]$Value
-            } 
-            elseif ($settingType -like "*[double]*") {
-                $config.$Setting = [double]$Value
-            } 
             else {
-                $config.$Setting = $Value # Treat as string by default
+                # Setting exists, determine its type and convert the new value accordingly
+                $currentValue = $config.$Setting
+                
+                if ($null -eq $currentValue) {
+                    # If current value is null, just use the string value
+                    $config.$Setting = $Value
+                }
+                elseif ($currentValue -is [int] -or $currentValue -is [long]) {
+                    # Try to convert to integer
+                    try { 
+                        $config.$Setting = [int]$Value 
+                    }
+                    catch { 
+                        throw "Value for '$Setting' must be an integer (current type: $($currentValue.GetType().Name))."
+                    }
+                }
+                elseif ($currentValue -is [double] -or $currentValue -is [float] -or $currentValue -is [decimal]) {
+                    # Try to convert to double
+                    try { 
+                        $config.$Setting = [double]$Value 
+                    }
+                    catch { 
+                        throw "Value for '$Setting' must be a decimal number (current type: $($currentValue.GetType().Name))."
+                    }
+                }
+                elseif ($currentValue -is [bool]) {
+                    # Try to convert to boolean
+                    if ($Value -in @('true', 'false', '0', '1', '$true', '$false')) {
+                        $config.$Setting = [bool]::Parse($Value.ToLower().Replace('$', ''))
+                    }
+                    else {
+                        throw "Value for '$Setting' must be a boolean (true/false) (current type: Boolean)."
+                    }
+                }
+                else {
+                    # Default to string for all other types
+                    $config.$Setting = $Value
+                }
             }
 
             # Save updated config
