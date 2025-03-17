@@ -37,7 +37,7 @@ function Invoke-OllamaAIGenAPI {
                 Write-Warning "OllamaEndpoint not found in config file. Using default: 'http://localhost:11434/api/chat'."
             }
             Write-Verbose "Ollama Endpoint: '$script:OllamaEndpoint'"
-            $Model = if ($Model) { model } else { $script:LLMConfiguration.DefaultOllamaModel }
+            $Model = if ($Model) { $model } else { $script:LLMConfiguration.DefaultOllamaModel }
             Write-Verbose "Initializing Invoke-OllamaAIGenAPI for model '$Model'"
 
 
@@ -47,47 +47,10 @@ function Invoke-OllamaAIGenAPI {
             # If config loading fails, use hardcoded defaults for context sizing and endpoint
             $script:OllamaEndpoint = "http://localhost:11434/api/chat" # Fallback default endpoint
         }
-        function script:Get-OptimalContextSize {
-            param(
-                [Parameter(Mandatory)]
-                [string]$SystemPrompt,
-                [Parameter(Mandatory)]
-                [string]$UserPrompt,
-                [Parameter()]
-                [int]$MaxContextSize, # Now parameters are mandatory, caller is responsible for providing
-                [Parameter()]
-                [double]$WordsPerTokenHeuristic,
-                [Parameter()]
-                [double]$SafetyMarginPercent
-            )
-            $combinedPrompt = "$SystemPrompt`n`n$UserPrompt"
-            $wordCount = ($combinedPrompt -split '\s+' | Measure-Object).Count # Split by whitespace and count words
-            $estimatedTokens = [int]([double]($wordCount / $WordsPerTokenHeuristic) * (1 + $SafetyMarginPercent))
-
-            # Ensure context size does not exceed maximum
-            if ($estimatedTokens -gt $MaxContextSize) {
-                $optimalContextSize = $MaxContextSize
-                Write-Warning "Estimated tokens ($estimatedTokens) exceeds MaxContextSize ($MaxContextSize). Using MaxContextSize."
-            }
-            else {
-                $optimalContextSize = $estimatedTokens
-            }
-            Write-Verbose "Estimated tokens: $estimatedTokens, Optimal Context Size: $optimalContextSize"
-            return $optimalContextSize
-        }
     }
     process {
         try {
-            Write-Verbose "Sending request to Ollama API (Model: '$Model')"
-
-            # Retrieve context sizing values from configuration (using defaults if config load failed)
-            $maxContextSizeForCall = if ($script:LLMConfiguration.OllamaMaxContextSize) { $script:LLMConfiguration.OllamaMaxContextSize } else { 12288 } # Default if not in config
-            $wordsPerTokenHeuristicForCall = if ($script:LLMConfiguration.OllamaWordsPerTokenHeuristic) { $script:LLMConfiguration.OllamaWordsPerTokenHeuristic } else { 0.75 } # Default if not in config
-            $safetyMarginPercentForCall = if ($script:LLMConfiguration.OllamaSafetyMarginPercent) { $script:LLMConfiguration.OllamaSafetyMarginPercent } else { 0.1 } # Default if not in config
-
-
-            # Calculate optimal context size dynamically, now passing config values as parameters
-            $optimalContextSize = script:Get-OptimalContextSize -SystemPrompt $SystemPrompt -UserPrompt $UserPrompt -MaxContextSize $maxContextSizeForCall -WordsPerTokenHeuristic $wordsPerTokenHeuristicForCall -SafetyMarginPercent $safetyMarginPercentForCall
+            Write-Verbose "Sending request to Ollama API (Model: '$Model')"          
 
             $body = @{
                 model    = $Model
@@ -112,9 +75,8 @@ function Invoke-OllamaAIGenAPI {
                     }
                     required   = @("message")
                 }
-                context  = $optimalContextSize # Use dynamically calculated context size
                 options  = @{
-                    temperature = 0.1 # Temperature setting (adjust for desired creativity)
+                    temperature = 0.3 # Temperature setting (adjust for desired creativity)
                 }
             }
 

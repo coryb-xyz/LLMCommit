@@ -33,7 +33,7 @@ function Invoke-GeminiAIGenAPI {
             # If config loading fails, defaults will be used in process block
         }
         # --- End Config Loading ---
-        $Model = if ($Model) { model } else { $script:LLMConfiguration.DefaultOllamaModel }
+        $Model = if ($Model) { model } else { $script:LLMConfiguration.DefaultGeminiModel }
 
         Write-Verbose "Initializing Invoke-GeminiAIGenAPI for model '$Model'"
         $GeminiEndpointBase = "https://generativelanguage.googleapis.com/v1beta/models"
